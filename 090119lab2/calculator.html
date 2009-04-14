@@ -1,0 +1,82 @@
+  <head>
+    <title>Calculator</title>
+<script language="javascript">
+<!--
+function add(){
+  var num1=parseFloat(document.calc.num1.value);
+  var num2=parseFloat(document.calc.num2.value);
+  document.calc.result.value=num1+num2;
+}
+function subtract(){
+  var num1=document.calc.num1.value;
+  var num2=document.calc.num2.value;
+  document.calc.result.value=num1-num2;
+}
+function multiply(){
+  var num1=document.calc.num1.value;
+  var num2=document.calc.num2.value;
+  document.calc.result.value=num1*num2;
+}
+function divide(){
+  var num1=document.calc.num1.value;
+  var num2=document.calc.num2.value;
+  if (num2==0) {
+    window.alert("Egad man! You can't divide by 0.");
+    document.calc.num2.value="";
+  }
+  else {
+    document.calc.result.value=num1/num2;
+  }
+}
+
+//-->
+</script>
+  </head>
+
+  <body bgcolor="#FFFFFF">
+  Enter two numbers and click the arithmetic operation you wish to perform.<br />
+    <div align="center">
+    <form action="" method="POST" name="calc">
+      <table border="0" cellspacing="0" cellpadding="2">
+        <tr>
+          <td width="75">
+            <div align="right">
+              <input type="text" name="num1" size="5" />
+            </div>
+          </td>
+
+          <td width="50">
+            <div align="center">
+              <input type="button" value=" + " onclick="add()" /><br />
+              <input type="button" value=" - " onclick="subtract()" /><br />
+              <input type="button" value=" * " onclick="multiply()" /><br />
+              <input type="button" value=" / " onclick="divide()" /><br />
+            </div>
+          </td>
+
+          <td width="75">
+          <input type="text" name="num2" value="" size="5" /> </td>
+        </tr>
+
+        <tr>
+          <td colspan="3" width="200">
+            <div align="center">
+               <input type="reset" value="Clear" />
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td colspan="3" width="200">
+            <div align="center">
+              <input type="text" name="result" value="" size="10" />
+            </div>
+          </td>
+        </tr>
+      </table>
+    </form>
+    </div>
+  </body>
+</html>
+
+

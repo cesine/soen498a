@@ -1,0 +1,31 @@
+body {
+        background-color: #FFFFFF;
+        line-height: 120%;
+        height: 100%;
+        font-family: Tahoma, Verdana, Arial;
+        font-size: 80%;
+        font-weight: normal;
+        color: #333333;
+        padding: 0px;
+        margin: 15px;
+} 
+
+a:link, a:visited {
+        text-decoration: none;
+        color: #555588;
+} 
+
+a:hover {
+        text-decoration: underline;
+}
+
+
+H1 { FONT-SIZE: 170%; }
+
+H2 { FONT-SIZE: 150%; }
+
+H3 { FONT-SIZE: 130%; }
+
+H4 { FONT-SIZE: 110%; }
+		
+p.textbox {margin-left:10px; text-indent:5px; width: 250px; }div.c1 {text-align: center; }

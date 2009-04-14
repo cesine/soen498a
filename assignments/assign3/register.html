@@ -1,0 +1,78 @@
+<html>
+<head>
+<title>
+Login page
+
+</title>
+</head>
+
+<body>
+<form action="echo.cgi" method="get" name="loginform">
+<table border="1">
+<tr><td align="left">Username: </td><td align="right">
+<input type"text" name="user" value="" size="30" /></td>
+
+<tr><td> Password:</td><td>
+<input type="password" name="pass"  value="" size="30" /></td></tr>
+
+<tr><td> Password:</td><td>
+<input type="password" name="pass2"  value="" size="30" /></td></tr>
+
+</table>
+<input type="submit" value="Submit" /> 
+<input type="reset"  value="Reset The Form" /><br />
+</form>
+<script language="JavaScript">
+<!--
+
+//put the curser at user when the page loads
+document.loginform.user.focus();
+
+document.loginform.onsubmit=validate;
+	function validate() {
+		var password=document.loginform.pass.value;
+		var password2=document.loginform.pass2.value;
+		alert("Validating form");
+		
+		if ( (password!=password2) ){
+			alert("Passwords do not match, please try again.");
+			document.loginform.pass.focus();
+                        document.loginform.pass.select();
+			return false;
+		}
+
+		if ( (password.length<7 ) ) {
+			alert("Password is too short, please try again.");
+			document.loginform.pass.focus();
+			document.loginform.pass.select();
+			return false;
+		}
+		
+		//http://www.javascriptkit.com/javatutors/redev3.shtml	
+		var securepass = password.search(/[^a-zA-Z]/);
+		//alert(securepass);
+		if ( (securepass == -1) || (countchar(password," ")>0) ) {
+			alert("Password must contain no spaces and one non alphabetical character, please try again.");
+			document.loginform.pass.focus();
+                        document.loginform.pass.select();
+                        return false;
+
+		}
+		return true;
+	}
+	
+	function countchar(thestring,thechar){
+		var count=0;
+		for (var x=0 ; x<thestring.length; x++) {
+			if(thestring.charAt(x)==thechar){
+				count++;
+			}
+		}		
+		return count;
+
+	}
+//-->
+</script>
+
+</body>
+</html>

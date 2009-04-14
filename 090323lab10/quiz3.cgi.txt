@@ -1,0 +1,329 @@
+#! /encs/bin/perl
+print "Content-type: text/html\n\n";
+
+
+if ($ENV{"REQUEST_METHOD"} eq "POST") {
+  read(STDIN, $datastring, $ENV{"CONTENT_LENGTH"});		
+}
+elsif (exists $ENV{"REQUEST_METHOD"}) {		# data from GET transaction (or HEAD or other)
+  $datastring = $ENV{"QUERY_STRING"};
+}
+else {
+  print "Offline execution detected\n";
+  print "Please enter some data.\n";
+  $datastring = <>;
+  chomp $datastring;
+  print "== data accepted == HTML output follows ==\n\n";
+}
+
+###decode######################################################
+$datastring =~s/%0D%0A/\n/g;                    			#step to deal with line
+																											#breaks in text areas
+@nameValuePairs = split(/&/, $datastring);						#step 1
+foreach $pair (@nameValuePairs) {
+  ($name, $value) = split(/=/, $pair);								#step 2
+  
+  $name =~tr/+/ /;                                 		#step 3
+  $name =~s/%([\da-fA-F]{2})/pack("C",hex($1))/eg; 		#step 3
+  $value =~tr/+/ /;                                		#step 3
+  $value =~s/%([\da-fA-F]{2})/pack("C",hex($1))/eg;		#step 3
+  
+  if(exists $formHash{$name}) {												#improved step 4,
+    $formHash{$name} = $formHash{$name}.";".$value;		#now handles multiple
+  }																										#select menus
+  else {
+    $formHash{$name} = $value;
+  }   	
+}
+###done decoding###############################################
+
+### global variables ##########################################
+use DBI;
+$dbhandle = DBI->connect("DBI:CSV:f_dir=/www/home/v/v_cook/teaching/soen498a/090323lab10/quizdb")  
+    or &errorPage("Can't connect to database". DBI->errstr()); 
+$file_life_span = 1.0/24; # in days (so is 1 hours)
+$time_out = 1.0/24; # in days
+$cache_limit = 300;
+$state_table_name = "states";  # name of state table
+$quiz_table_name = "quiz";     # name of quiz table
+%stateHash=();
+### end of global variables #####################################
+
+### app logic ###################################################
+if($formHash{"request"} eq "begin_quiz") {
+ 	&begin_quiz;
+}
+elsif($formHash{"request"} eq "grade_question") {
+	&grade_question;
+}
+else {
+	&welcome_page;
+}
+### end app logic ################################################
+
+
+##################################################################
+sub welcome_page {
+ print <<PAGE;
+ <html><head><title>Trivia Quiz</title></head>
+  <body>
+   <h2>Welcome to the Trivia Quiz</h2>
+   You will be given a series of questions.
+    <form action="$ENV{SCRIPT_NAME}" method="GET">
+     <input type="hidden" name="request" value="begin_quiz">
+     <input type="submit" value="Begin Quiz">
+    </form>
+ </body>
+</html>
+PAGE
+}
+
+##################################################################
+sub print_question {
+  my ($sessionID, $qnumber) = @_;
+  $sql = "SELECT question, choice1, choice2, choice3, choice4, choice5
+          FROM $quiz_table_name
+          WHERE qnumber = $qnumber";
+  $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare");
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  my ($question, @choices) = $qObj->fetchrow_array();
+  $qObj -> finish();
+  print<<QUESTION;
+  <form action = "$ENV{SCRIPT_NAME}" method="GET">
+  $qnumber. $question<br/> 
+QUESTION
+
+  foreach $answer (@choices)
+  {
+    print "<input type=\"radio\" name=\"answer\" value=\"$answer\"/>$answer\n";
+  }
+
+  print<<FORM;
+   <br/>
+   <input type="hidden" name="id" value="$sessionID"/>
+   <input type="hidden" name="qnumber" value="$qnumber"/>
+   <input type="hidden" name="request" value="grade_question"/>
+   <input type="submit" value="Submit answer"/>
+   </form>
+FORM
+}
+
+##################################################################
+sub begin_quiz {
+ my $sessionID = &get_long_id_db($dbhandle, $state_table_name, $cache_limit, $file_life_span);
+ %stateHash = ("qnumber"=>1, "correct"=>0);
+ &write_state_db($dbhandle, $state_table_name, $sessionID, %stateHash);
+
+ print <<TOP;
+ <html><head><title>Trivia Quiz</title></head>
+  <body>
+   Here is your first question.<br/>
+TOP
+
+ &print_question($sessionID, 1);
+
+ print <<BOTTOM;
+ </body>
+</html>
+BOTTOM
+}
+
+##################################################################
+sub grade_question {
+  my $sessionID = $formHash{"id"};
+  %stateHash= &read_state_db($dbhandle, $state_table_name, $sessionID, $time_out);
+  $sql = "SELECT answer from $quiz_table_name WHERE qnumber = $stateHash{qnumber}";
+  $qObj = $dbhandle -> prepare($sql);
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  my ($correct_answer) = $qObj->fetchrow_array();
+  $qObj -> finish();
+  $sql = "SELECT * from $quiz_table_name";
+  $qObj = $dbhandle -> prepare($sql);
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  $qObj -> fetchall_arrayref(); # Fetch all rows, no need to use them
+  my $number_of_questions = $qObj->rows();
+  $qObj -> finish();
+
+  if ($stateHash{"qnumber"} > $number_of_questions) { 
+    $sentence = "Quiz is over.";
+  }
+  elsif($formHash{"qnumber"} < $stateHash{"qnumber"}) {
+    $sentence = "You have already answered that question.";
+  }
+  else { 
+   if($formHash{"answer"} eq $correct_answer) {
+     $stateHash{"correct"}++;
+     $sentence = "Your answer of $formHash{answer} is CORRECT.<br/>\n";
+   }
+   else {
+     $sentence =  "Sorry, your answer of $formHash{answer} is ".
+                  "INCORRECT.<br/>\n";
+   }
+   $stateHash{"qnumber"}++; # The next question number.
+   &write_state_db($dbhandle, $state_table_name, $sessionID, %stateHash);
+  }
+
+  print<<TOP;
+<html><head><title>Trivia Quiz</title></head>
+ <body>
+  $sentence
+TOP
+  if($stateHash{"qnumber"} > $number_of_questions)
+  {
+    print "Your final score is $stateHash{correct} correct out of $number_of_questions.\n",
+          "Thank you for playing.<br/>\n",
+          "<a href=\"$ENV{SCRIPT_NAME}?request=begin_quiz\">To play again</a>\n";
+    # We could also delete the state file at this point by
+    #   unlink "$stateDir"."$sessionID.state";
+    # or we could save results in some statistics file.
+  }
+  else
+  {
+    print "Your score so far is $stateHash{correct} correct out of ", $stateHash{qnumber}-1, ".\n",
+          "Here is your next question.\n"; 
+    &print_question($sessionID, $stateHash{"qnumber"});
+  }
+  print<<BOTTOM;
+  </body>
+</html>
+BOTTOM
+}
+
+#################################################################
+#################################################################
+# end app logic functions
+# begin toolkit functions
+#################################################################
+#################################################################
+
+#################################################################
+sub write_state_db {
+  my ($dbhandle, $table_name, $sessionID, %states) = @_;
+  ### add the updated last-modified time to the front of the incoming state hash
+  my $currtime = time;
+  my @updates = ("last_modified = '$currtime'");
+  foreach $key (keys %states){
+    push @updates, "$key = '$states{$key}'";
+  }
+ 
+  ###  update the state record
+  $sql = "UPDATE $table_name set " . join(",", @updates) . " WHERE id = '$sessionID'";
+  $qObj = $dbhandle -> prepare($sql);
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  $qObj -> finish();
+}
+
+#################################################################
+sub read_state_db {
+  my ($dbhandle, $table_name, $sessionID, $time_out, 
+        $time_out_function, $time_out_message) = @_;   ### $time_out is in days
+
+  ### read the desired state record into the query object
+  $sql = "SELECT * FROM $table_name WHERE ID = '$sessionID'";
+  $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  my $rowhashref = $qObj->fetchrow_hashref();
+  $qObj -> finish();
+
+  if(! $rowhashref) { ### $rowhashref is an empty reference, which means no such id...
+    &errorPage("No such session.");
+  }
+  my %hash = %$rowhashref;  ### get the actual hash containing the state record
+  ### timeout test
+  if(($time_out > 0) && ($hash{"last_modified"} < time - $time_out*24*60*60)){ 
+    ### timed out...
+    if($time_out_function) {
+      &$time_out_function($time_out_message);
+			exit;
+    }
+		else{
+      	&errorPage("Your session has timed out");
+    }
+  }
+  ### touch the record
+  $sql = "UPDATE $table_name SET last_modified = " . time . " WHERE ID = '$sessionID'";
+  $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  $qObj -> finish();
+  ### only need to return the actual state data
+  delete $hash{"id"};
+  delete $hash{"last_modified"};
+  return %hash;           
+}
+
+#################################################################
+sub get_long_id_db {
+  my ($dbhandle, $table_name, $cache_limit, $file_life_span) = @_;
+ 
+  ### count number of sessions
+  my $sql = "SELECT id FROM $table_name";  
+  my $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+  $qObj -> fetchall_arrayref(); 
+
+  if($qObj->rows() >= $cache_limit) {       ### Need to police table?
+    my $expiredtime = int(time - $file_life_span*24*60*60); ### in seconds ###
+    $qObj -> finish();
+
+    ### police the table
+    $sql = "DELETE FROM $table_name WHERE last_modified < $expiredtime";
+    $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");;
+    $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr()); 
+    $qObj -> finish();
+                           
+    ### count number of sessions again
+    $sql = "SELECT id FROM $table_name";        
+    $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");;
+    $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr()); 
+    $qObj -> fetchall_arrayref(); 
+
+    if($qObj->rows() >= $cache_limit) { ### still over limit?
+      # should generate e-mail message to warn administrator
+      &errorPage("Site busy. Please try again later.");
+    }
+  }
+  $qObj -> finish();
+
+  my $id = &generate_random_string(32);
+  my $currtime = time;
+
+  ### create new state record
+  $sql = "INSERT INTO $table_name (id, last_modified) values ('$id', $currtime)";
+  $qObj = $dbhandle -> prepare($sql) or &errorPage("Can't prepare.");;
+  $qObj -> execute() or &errorPage("Can't execute " . $qObj->errstr());
+
+  return $id;
+}
+
+#################################################################
+sub generate_random_string {
+  my $n = $_[0];
+  my $result = "";
+  my @chars = (0..9, 'a'..'z', 'A'..'Z');
+  my $which;
+  for($i = 1 ; $i <= $n ; $i++) {
+  	$which=int rand 62;
+   $result = $result . $chars[$which];
+  }
+  return $result;
+}
+
+#################################################################
+sub errorPage {
+ my $message = $_[0]; # the incoming parameter, store in localized variable
+ print<<ALL;
+ <html>
+ <head>
+  <title>Error encountered</title>
+ </head>
+ <body>
+  <h1>Error Encountered</h1>
+  <h3>$message</h3>
+  Please try again, or report the problem to the webmaster.
+ </body>
+ </html>
+ALL
+ exit;
+}
+
+
